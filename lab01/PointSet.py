@@ -123,35 +123,31 @@ class PointSet:
             
             #Best split for continuous value      
             elif self.types[feature_number] == FeaturesTypes.REAL :
-                features_number_only = self.features[:,feature_number]
-                sorted_indices = features_number_only.argsort()
-                sorted_feature = features_number_only[sorted_indices]
-                sorted_label = self.labels[sorted_indices]
-                
-                feature1 = list(sorted_feature)
-                feature2 = []
-                
-                for i in range(len(sorted_feature) - 1):
-                    if sorted_feature[-i-2] != sorted_feature[-i-1]:
-                    #     feature2.append(feature1.pop())
-                    # elif sorted_label[-i-2] == sorted_label[-i-1]:
-                    #     feature2.append(feature1.pop())
-                    # else:
-                        
-                        node1 = sorted_label[:-i-1]
-                        node2 = sorted_label[-i-2:]
-                        n1 = len(node1)
-                        n2 = len(node2)
-                        
-                        #Compute Gini index
-                        g1 = PointSet([], node1, []).get_gini()
-                        g2 = PointSet([], node2, []).get_gini()
+                for feature_value in np.unique(self.features[:, feature_number]):
+                    condition = (self.features[:,feature_number] < feature_value)
+                    node1 = self.labels[condition]
+                    node2 = self.labels[~condition]
+                    n1 = node1.size
+                    n2 = node2.size
 
-                        inner_gini_split = n1/(n1+n2) * g1 + n2/(n1+n2) * g2
+                    #Compute Gini index
+                    g1 = PointSet([], node1, []).get_gini()
+                    g2 = PointSet([], node2, []).get_gini()
                     
-                        if inner_gini_split < gini_split and n1 >= self.min_split_points and n2 >= self.min_split_points:
-                            gini_split = inner_gini_split
-                            best_inner_feature_value = (sorted_feature[-i-2] + sorted_feature[-i-1])/2
+                    try:
+                        L = self.features[condition, feature_number].max()
+                    except:
+                        L = 0
+                    try:
+                        R = self.features[~condition, feature_number].min()
+                    except:
+                        R = 0
+
+                    inner_gini_split = n1/(n1+n2) * g1 + n2/(n1+n2) * g2
+                    
+                    if inner_gini_split < gini_split and n1 >= self.min_split_points and n2>= self.min_split_points:
+                        gini_split = inner_gini_split
+                        best_inner_feature_value = (L+R)/2
             
             # Look for the minimum split between the features
             if gini_split < best_split:
