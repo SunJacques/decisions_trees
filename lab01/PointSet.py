@@ -64,7 +64,6 @@ class PointSet:
             gini -= (n1/n) ** 2 
         
         return gini
-        
     
     def get_best_threshold(self) -> float:
         return self.best_feature_value
@@ -123,32 +122,37 @@ class PointSet:
             
             #Best split for continuous value      
             elif self.types[feature_number] == FeaturesTypes.REAL :
-                for feature_value in np.unique(self.features[:, feature_number]):
-                    condition = (self.features[:,feature_number] < feature_value)
-                    node1 = self.labels[condition]
-                    node2 = self.labels[~condition]
-                    n1 = node1.size
-                    n2 = node2.size
+                features_column = self.features[:,feature_number]
+                
+                sorted_indices = features_column.argsort()
+                sorted_feature = features_column[sorted_indices]
+                sorted_label = self.labels[sorted_indices]
+                
+                ndata = len(sorted_feature)
+                
+                left_non_zero = np.count_nonzero(sorted_label[0])
+                right_non_zero = np.count_nonzero(sorted_label[1:])
+                left_size = 1
+                right_size = ndata - 1
+                
+                for i in range(1, ndata - 1):
+                    left_size += 1
+                    right_size -= 1
+                    if sorted_label[i]:
+                        left_non_zero += 1
+                        right_non_zero -= 1
+                        
+                    if sorted_feature[i] != sorted_feature[i+1]:
+                        #Compute Gini index
+                        g1 = 1 - (left_non_zero / left_size) ** 2 - ((left_size - left_non_zero) / left_size) **2
+                        g2 = 1 - (right_non_zero / right_size) ** 2 - ((right_size - right_non_zero) / right_size) **2
 
-                    #Compute Gini index
-                    g1 = PointSet([], node1, []).get_gini()
-                    g2 = PointSet([], node2, []).get_gini()
+                        inner_gini_split = left_size/(left_size + right_size) * g1 + right_size / (left_size + right_size) * g2
                     
-                    try:
-                        L = self.features[condition, feature_number].max()
-                    except:
-                        L = 0
-                    try:
-                        R = self.features[~condition, feature_number].min()
-                    except:
-                        R = 0
-
-                    inner_gini_split = n1/(n1+n2) * g1 + n2/(n1+n2) * g2
-                    
-                    if inner_gini_split < gini_split and n1 >= self.min_split_points and n2>= self.min_split_points:
-                        gini_split = inner_gini_split
-                        best_inner_feature_value = (L+R)/2
-            
+                        if inner_gini_split < gini_split and left_size >= self.min_split_points and right_size >= self.min_split_points:
+                            gini_split = inner_gini_split
+                            best_inner_feature_value = (sorted_feature[i] + sorted_feature[i+1])/2
+        
             # Look for the minimum split between the features
             if gini_split < best_split:
                 best_split = gini_split
