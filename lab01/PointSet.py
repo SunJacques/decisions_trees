@@ -23,7 +23,11 @@ class PointSet:
         labels : np.array[bool]
             1D array containing the labels of the points.
     """
-    def __init__(self, features: List[List[float]], labels: List[bool], types: List[FeaturesTypes]):
+    def __init__(self, 
+                 features: List[List[float]], 
+                 labels: List[bool], 
+                 types: List[FeaturesTypes], 
+                 min_split_points: int = 1):
         """
         Parameters
         ----------
@@ -40,9 +44,9 @@ class PointSet:
         """
 
         self.types = types
+        self.min_split_points = min_split_points
         self.features = np.array(features)
         self.labels = np.array(labels)
-        self.best_type = None
     
     def get_gini(self) -> float:
         """Computes the Gini score of the set of points
@@ -55,6 +59,7 @@ class PointSet:
         gini = 1
         n = self.labels.size
         for label in set(self.labels):
+            #Count the number of True label
             n1 = np.count_nonzero(self.labels == label)
             gini -= (n1/n) ** 2 
         
@@ -62,7 +67,7 @@ class PointSet:
         
     
     def get_best_threshold(self) -> float:
-        return self.best_index, self.best_feature_value
+        return self.best_feature_value
 
     def get_best_gain(self) -> Tuple[int, float]:
         """Compute the feature along which splitting provides the best gain
@@ -76,14 +81,9 @@ class PointSet:
             The best Gini gain achievable by splitting this set along one of
             its features.
         """
-        
-        
         best_split = np.inf
-        best_index = 0
+        best_feature = None
         best_feature_value = None
-        
-        # print(self.features.shape)
-        
         
         for feature_number in range(self.features[0].size):
             gini_split = np.inf
@@ -95,17 +95,18 @@ class PointSet:
                 n1 = node1.size
                 n2 = node2.size
                 
-                
-                g1 = PointSet([], node1, []).get_gini()
-                g2 = PointSet([], node2, []).get_gini()
-                
-                gini_split = n1/(n1+n2) * g1 + n2/(n1+n2) * g2
+                if n1 >= self.min_split_points and n2>= self.min_split_points:
+                    g1 = PointSet([], node1, []).get_gini()
+                    g2 = PointSet([], node2, []).get_gini()
+                    
+                    gini_split = n1/(n1+n2) * g1 + n2/(n1+n2) * g2
                 
             elif self.types[feature_number] == FeaturesTypes.CLASSES:
                 #Looking for the best split with one child of size 1
                 for feature_value in np.unique(self.features[:,feature_number]):
-                    node1 = self.labels[self.features[:,feature_number] == feature_value]
-                    node2 = self.labels[self.features[:,feature_number] != feature_value]
+                    condition = (self.features[:,feature_number] == feature_value)
+                    node1 = self.labels[condition]
+                    node2 = self.labels[~condition]
                     n1 = node1.size
                     n2 = node2.size
                     
@@ -116,32 +117,59 @@ class PointSet:
                     inner_gini_split = n1/(n1+n2) * g1 + n2/(n1+n2) * g2
                     
                     #Find the min split between the different binary split
-                    if inner_gini_split < gini_split:
+                    if inner_gini_split < gini_split and n1 >= self.min_split_points and n2>= self.min_split_points:
                         gini_split = inner_gini_split
                         best_inner_feature_value = feature_value
-                        
-            #elif self.types[feature_number] == FeaturesTypes.REAL :
+            
+            #Best split for continuous value      
+            elif self.types[feature_number] == FeaturesTypes.REAL :
+                features_number_only = self.features[:,feature_number]
+                sorted_indices = features_number_only.argsort()
+                sorted_feature = features_number_only[sorted_indices]
+                sorted_label = self.labels[sorted_indices]
                 
+                feature1 = list(sorted_feature)
+                feature2 = []
+                
+                for i in range(len(sorted_feature) - 1):
+                    if sorted_feature[-i-2] != sorted_feature[-i-1]:
+                    #     feature2.append(feature1.pop())
+                    # elif sorted_label[-i-2] == sorted_label[-i-1]:
+                    #     feature2.append(feature1.pop())
+                    # else:
+                        
+                        node1 = sorted_label[:-i-1]
+                        node2 = sorted_label[-i-2:]
+                        n1 = len(node1)
+                        n2 = len(node2)
+                        
+                        #Compute Gini index
+                        g1 = PointSet([], node1, []).get_gini()
+                        g2 = PointSet([], node2, []).get_gini()
+
+                        inner_gini_split = n1/(n1+n2) * g1 + n2/(n1+n2) * g2
+                    
+                        if inner_gini_split < gini_split and n1 >= self.min_split_points and n2 >= self.min_split_points:
+                            gini_split = inner_gini_split
+                            best_inner_feature_value = (sorted_feature[-i-2] + sorted_feature[-i-1])/2
             
             # Look for the minimum split between the features
             if gini_split < best_split:
                 best_split = gini_split
                 
-                if self.types[feature_number] == FeaturesTypes.CLASSES:
-                    best_index = feature_number
+                if self.types[feature_number] == FeaturesTypes.CLASSES or self.types[feature_number] == FeaturesTypes.REAL:
+                    best_feature = feature_number
                     best_feature_value = best_inner_feature_value
                 else:
-                    best_index = feature_number
+                    best_feature = feature_number
                     best_feature_value = None
                     
-                
-                
-            best_gain = self.get_gini() - best_split
-        
-        self.best_index = best_index
+        self.best_gain = self.get_gini() - best_split
+    
+        self.best_feature = best_feature
         self.best_feature_value = best_feature_value
             
-        return best_gain
+        return self.best_feature, self.best_gain
             
             
             

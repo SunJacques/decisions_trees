@@ -26,8 +26,6 @@ def precision_recall(expected_results: List[bool], actual_results: List[bool]) -
             FP += 1
         elif v == (1,0):
             FN += 1
-
-    
     
     return TP / (TP + FP), TP / (TP + FN)
     
